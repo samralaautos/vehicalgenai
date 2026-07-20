@@ -215,13 +215,75 @@ def get_gemini_key() -> str | None:
         return None
 
 
-def generate_ai_explanation(question: str, category: str, confidence: float) -> str | None:
-    """Use Gemini to explain the Keras prediction in natural language."""
-    key = get_gemini_key()
-    if not key:
-        return None
+LOCAL_EXPLANATIONS = {
+    "Battery / starter system": {
+        "summary": "Your vehicle's symptoms strongly suggest a **battery or starter system issue**. This is one of the most common vehicle problems and is usually straightforward to diagnose and fix.",
+        "checks": [
+            "🔋 **Check the battery terminals** — Open the bonnet and look for white or blue powdery corrosion on the battery terminals. Clean them carefully with a dry cloth.",
+            "💡 **Check dashboard warning lights** — A battery warning light (looks like a rectangle with + and − signs) means the alternator is not charging the battery while driving.",
+            "🔑 **Listen when you turn the key** — A single click usually means a faulty starter motor. Rapid clicking usually means a flat battery. No sound at all may mean a blown fuse.",
+        ],
+        "urgency": "⚠️ **Medium urgency.** The vehicle may not restart once turned off. Do not turn off the engine until you reach a garage.",
+        "mechanic": "Visit a mechanic if the battery is more than 3–4 years old, if jump-starting does not help, or if the battery warning light stays on while driving.",
+    },
+    "Brake safety issue": {
+        "summary": "Your description suggests a **brake system issue**. This is a **safety-critical** problem that must be taken seriously. Brakes are the most important safety system on your vehicle.",
+        "checks": [
+            "🛑 **Check brake pedal feel** — If the pedal sinks to the floor or feels spongy, this may indicate low brake fluid or a fluid leak. Check the brake fluid reservoir under the bonnet.",
+            "👂 **Listen for noises** — Squealing usually means worn brake pads. Grinding means the pads are completely worn and metal is contacting the disc — stop driving immediately.",
+            "🚗 **Check for pulling** — If the car pulls strongly to one side when braking, one brake caliper may be sticking or a brake pad may be unevenly worn.",
+        ],
+        "urgency": "🚨 **HIGH URGENCY — Safety Critical.** If braking ability is reduced, do not drive the vehicle. Call a mechanic or have the vehicle towed.",
+        "mechanic": "See a qualified mechanic immediately if you hear grinding, the pedal goes to the floor, or the brake warning light is on. Do not delay brake repairs.",
+    },
+    "Engine overheating": {
+        "summary": "Your vehicle appears to be experiencing **engine overheating**. This is a serious issue that can cause permanent and very expensive engine damage if not addressed immediately.",
+        "checks": [
+            "🌡️ **Watch the temperature gauge** — If the needle moves past the midpoint toward 'H' (Hot), pull over safely and switch off the engine. Do NOT open the radiator cap while hot.",
+            "💧 **Check coolant level (when cold)** — Once the engine has cooled (30+ minutes), check the coolant reservoir. Low coolant is the most common cause of overheating.",
+            "🌬️ **Check the radiator fan** — With the engine running, check if the cooling fan is spinning. A failed fan will cause overheating especially in traffic or at low speeds.",
+        ],
+        "urgency": "🚨 **HIGH URGENCY.** Pull over and stop the engine immediately if the temperature gauge is in the red or steam is visible. Continuing to drive will destroy the engine.",
+        "mechanic": "Visit a mechanic before driving again. Common causes include a broken water pump, thermostat, radiator leak, or blown head gasket — all require professional repair.",
+    },
+    "Tyre or suspension issue": {
+        "summary": "Your symptoms indicate a **tyre or suspension problem**. These issues affect vehicle safety, handling, and tyre lifespan, and should not be ignored.",
+        "checks": [
+            "🔄 **Check tyre pressure** — Use a tyre pressure gauge to check all four tyres including the spare. Incorrect pressure causes vibration, uneven wear, and poor handling.",
+            "👁️ **Visually inspect tyres** — Look for bulges, cracks, nails, or uneven wear patterns. Uneven wear (more on one edge) usually indicates wheel alignment or suspension problems.",
+            "🛞 **Test the suspension** — Press down firmly on each corner of the vehicle and release. It should bounce back once and stop. More bouncing means worn shock absorbers.",
+        ],
+        "urgency": "⚠️ **Medium urgency.** Tyre issues can become dangerous suddenly (blowout). Book an inspection within 1–2 days, sooner if you notice the car pulling or vibrating badly.",
+        "mechanic": "See a mechanic for wheel alignment, balancing, or suspension inspection if vibration or pulling persists. Tyre replacement should be done professionally.",
+    },
+    "Routine maintenance": {
+        "summary": "Your vehicle appears to be due for **routine maintenance**. Regular servicing is the single most important thing you can do to extend the life of your vehicle.",
+        "checks": [
+            "🛢️ **Check engine oil** — Pull the dipstick, wipe it clean, reinsert, and check again. Oil should be between MIN and MAX marks and appear amber/golden (not black and gritty).",
+            "📅 **Review your service history** — Check when the last service was done. Most vehicles need a service every 10,000–15,000 km or once a year, whichever comes first.",
+            "💡 **Check all fluid levels** — Check coolant, brake fluid, power steering fluid, and windscreen washer fluid. Top up with the correct fluid type as per the owner's manual.",
+        ],
+        "urgency": "✅ **Low urgency.** Routine maintenance is not an emergency, but neglecting it leads to costly repairs. Book a service within the next 2–4 weeks.",
+        "mechanic": "A standard full service at a qualified garage includes oil change, filter replacement, fluid top-ups, brake inspection, and safety checks. Follow your manufacturer's schedule.",
+    },
+    "Fuel-efficiency issue": {
+        "summary": "Your vehicle is experiencing a **fuel efficiency problem**. Poor fuel economy costs you money every day and often signals an underlying mechanical issue.",
+        "checks": [
+            "🔵 **Check tyre pressure** — Under-inflated tyres are the #1 cause of poor fuel economy. Even 10% below recommended pressure can increase fuel use by 2–3%.",
+            "🔧 **Check the air filter** — A clogged air filter restricts airflow to the engine, forcing it to burn more fuel. Hold it up to the light — if you cannot see through it, replace it.",
+            "⛽ **Review your driving habits** — Harsh acceleration, heavy braking, and idling all burn excess fuel. Smooth, steady driving at moderate speeds gives best economy.",
+        ],
+        "urgency": "ℹ️ **Low-Medium urgency.** A sudden, significant drop in fuel economy (not gradual) can indicate a faulty oxygen sensor, fuel injector issue, or other engine problem needing attention.",
+        "mechanic": "See a mechanic if fuel economy has dropped suddenly (not gradually over years). Fault codes from an OBD-II scanner can quickly pinpoint the cause.",
+    },
+}
 
-    prompt = f"""You are VehicleGen AI, a safety-first smart vehicle information assistant.
+
+def generate_ai_explanation(question: str, category: str, confidence: float) -> str:
+    """Use Gemini to explain the prediction; fall back to built-in explanations if unavailable."""
+    key = get_gemini_key()
+    if key:
+        prompt = f"""You are VehicleGen AI, a safety-first smart vehicle information assistant.
 The user wrote: {question}
 A Keras text-classification model predicted: {category} ({confidence:.1f}% confidence).
 
@@ -229,23 +291,36 @@ Explain this prediction in simple language. Give 3 practical checks, an urgency 
 and clearly say when a qualified mechanic is needed. Never claim a certain diagnosis.
 For brakes, steering, smoke, overheating, or fuel leaks, prioritize stopping the vehicle safely."""
 
-    # Try new google-genai SDK first, then fall back to google-generativeai
-    try:
-        from google import genai
-        client = genai.Client(api_key=key)
-        response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
-        return response.text
-    except Exception:
-        pass
+        try:
+            from google import genai
+            client = genai.Client(api_key=key)
+            response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+            return response.text
+        except Exception:
+            pass
 
-    try:
-        import google.generativeai as genai_legacy
-        genai_legacy.configure(api_key=key)
-        model_legacy = genai_legacy.GenerativeModel("gemini-2.0-flash")
-        response = model_legacy.generate_content(prompt)
-        return response.text
-    except Exception:
-        return None
+        try:
+            import google.generativeai as genai_legacy
+            genai_legacy.configure(api_key=key)
+            model_legacy = genai_legacy.GenerativeModel("gemini-2.0-flash")
+            response = model_legacy.generate_content(prompt)
+            return response.text
+        except Exception:
+            pass
+
+    # Built-in fallback explanation — always works, no API needed
+    data = LOCAL_EXPLANATIONS.get(category, {})
+    if not data:
+        return ""
+    lines = [data["summary"], ""]
+    lines.append("**🔍 3 Practical Checks:**")
+    for check in data["checks"]:
+        lines.append(f"- {check}")
+    lines.append("")
+    lines.append(data["urgency"])
+    lines.append("")
+    lines.append(f"**👨‍🔧 When to see a mechanic:** {data['mechanic']}")
+    return "\n".join(lines)
 
 
 st.title("🚗 VehicleGen AI – Smart Vehicle Information Assistant")
@@ -257,10 +332,10 @@ with st.sidebar:
     if get_gemini_key():
         st.success("Gemini Generative AI is connected.")
     else:
-        st.info("Keras prediction works now. Add a Gemini key in Streamlit secrets to enable Generative AI explanations.")
+        st.info("Running with built-in AI explanations. Add a Gemini key to `.streamlit/secrets.toml` to enable live Gemini responses.")
     st.warning("For brakes, smoke, steering difficulty, overheating, or fuel leaks: stop driving and seek professional help.")
 
-st.info("Try: “My car makes a clicking sound and will not start.”")
+st.info("Try: \u201cMy car makes a clicking sound and will not start.\u201d")
 question = st.text_area("Describe the car issue", placeholder="Example: My car is using too much fuel and the mileage has dropped.", height=130)
 
 if st.button("Predict issue category", type="primary", use_container_width=True):
@@ -286,15 +361,12 @@ if st.button("Predict issue category", type="primary", use_container_width=True)
             st.subheader("Recommended next step")
             st.write(advice(category))
 
-        # Gemini AI explanation card
+        # AI explanation card — always shows rich content
         with st.container(border=True):
-            st.subheader("🤖 Gemini AI explanation")
-            try:
-                ai_response = generate_ai_explanation(question, category, confidence)
-                if ai_response:
-                    st.write(ai_response)
-                else:
-                    st.info("Add `GEMINI_API_KEY` to `.streamlit/secrets.toml` to enable the Generative AI explanation.")
-            except Exception:
-                st.warning("The Keras prediction is ready, but Gemini could not be reached. Check the API key and internet connection.")
+            st.subheader("🤖 AI Vehicle Explanation")
+            ai_response = generate_ai_explanation(question, category, confidence)
+            if ai_response:
+                st.markdown(ai_response)
+            else:
+                st.info("Detailed explanation unavailable. Please check your connection.")
         st.caption("This is a small educational model trained on example text, not a replacement for professional diagnosis.")
