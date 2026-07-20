@@ -220,7 +220,6 @@ def generate_ai_explanation(question: str, category: str, confidence: float) -> 
     key = get_gemini_key()
     if not key:
         return None
-    from google import genai
 
     prompt = f"""You are VehicleGen AI, a safety-first smart vehicle information assistant.
 The user wrote: {question}
@@ -229,9 +228,24 @@ A Keras text-classification model predicted: {category} ({confidence:.1f}% confi
 Explain this prediction in simple language. Give 3 practical checks, an urgency level,
 and clearly say when a qualified mechanic is needed. Never claim a certain diagnosis.
 For brakes, steering, smoke, overheating, or fuel leaks, prioritize stopping the vehicle safely."""
-    client = genai.Client(api_key=key)
-    response = client.models.generate_content(model="gemini-3.5-flash", contents=prompt)
-    return response.text
+
+    # Try new google-genai SDK first, then fall back to google-generativeai
+    try:
+        from google import genai
+        client = genai.Client(api_key=key)
+        response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
+        return response.text
+    except Exception:
+        pass
+
+    try:
+        import google.generativeai as genai_legacy
+        genai_legacy.configure(api_key=key)
+        model_legacy = genai_legacy.GenerativeModel("gemini-2.0-flash")
+        response = model_legacy.generate_content(prompt)
+        return response.text
+    except Exception:
+        return None
 
 
 st.title("🚗 VehicleGen AI – Smart Vehicle Information Assistant")
