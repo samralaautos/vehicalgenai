@@ -7,7 +7,7 @@ import numpy as np
 import streamlit as st
 
 
-st.set_page_config(page_title="VehicleGen AI – Smart Vehicle Information Assistant", page_icon="🔧", layout="wide")
+st.set_page_config(page_title="Next Gen Vehical Predict Probelum Using AI", page_icon="🔧", layout="wide")
 
 # Custom responsive CSS styling
 st.markdown("""
@@ -323,12 +323,13 @@ For brakes, steering, smoke, overheating, or fuel leaks, prioritize stopping the
     return "\n".join(lines)
 
 
-st.title("🚗 VehicleGen AI – Smart Vehicle Information Assistant")
+st.title("🚗 Next Gen Vehical Predict Probelum Using AI")
 st.caption("A hybrid Generative AI and machine-learning project for automobile concerns.")
 
 with st.sidebar:
     st.header("About this project")
-    st.write("Keras predicts the issue category. Gemini turns the prediction into clear, natural-language guidance.")
+    st.write("Built an intelligent car diagnostics application Its Name Next Gen Vehical Predict Probelum Using AI. A Users can enter a vehicle fault or describe a problem in natural language, and the AI analyzes the input to predict the most likely issue. The application provides an explanation of the diagnosis along with suggested troubleshooting steps, making vehicle maintenance faster and more accessible ")
+
     if get_gemini_key():
         st.success("Gemini Generative AI is connected.")
     else:
